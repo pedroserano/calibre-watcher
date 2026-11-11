@@ -14,7 +14,7 @@ meant to run in a Docker container on a home server (TrueNAS in my case).
    OPDS feed.
 2. When a book appears there that it hasn't seen before, it records the **exact time
    it noticed**, downloads the cover, and adds the book to a queue on disk.
-3. A client on the same network (a Mac script, an iPhone Shortcut, anything that can
+3. A client on the same network (an iPhone Shortcut, a Mac script, anything that can
    make HTTP requests) asks for the queue whenever it's running, creates its journal
    entry using the recorded time, and then **acknowledges** the item so the watcher
    removes it.
@@ -186,6 +186,80 @@ A client only needs to do this whenever it runs:
 3. Once the entry has been saved, `POST /ack/<id>`. Don't acknowledge before saving,
    or a failure will lose the book. If the client crashes, the item just stays in
    the queue for next time.
+
+## iPhone setup: log books to Day One with Shortcuts
+
+This is the client I use on iOS. It reads the queue, creates a Day One entry for
+each book, and acknowledges it. It needs the Day One app installed, and the phone
+has to be on your home network to reach the watcher.
+
+### The "Log Books" shortcut
+
+Create a new shortcut in the Shortcuts app named **Log Books**. Replace
+`<truenas-ip>` with your server's address and `<QUEUE_TOKEN>` with your token:
+
+1. **Get Contents of URL**: `http://<truenas-ip>:8099/queue`, method **GET**,
+   header `Authorization` = `Bearer <QUEUE_TOKEN>`.
+2. **Get Dictionary from Input**.
+3. **Repeat with Each** on that result. Inside the loop:
+   1. **Get Dictionary Value** from *Repeat Item*, once each for `title`,
+      `authors`, `id` and `detected_at`.
+   2. **Combine Text** on `authors`, with the custom separator ` and ` (with a
+      space on each side).
+   3. **Get Dates from Input** on `detected_at`.
+   4. **Create Entry** (Day One): body
+      `Just finished reading [title] by [combined authors]`, tag **Book**, date from
+      the previous step, and your journal.
+   5. **Get Contents of URL**: `http://<truenas-ip>:8099/ack/[id]`, method
+      **POST**, with the same `Authorization` header. This removes the book from
+      the queue so it's never logged twice.
+4. **End Repeat**.
+
+### Run it automatically
+
+1. In Shortcuts, open the **Automation** tab and tap **+**.
+2. Pick a trigger:
+   - **Wi-Fi** (when you join your home network). This is the better choice, since
+     the phone needs your home network to reach the watcher anyway.
+   - **Time of Day**. This only works if you're home at that time.
+3. Choose **Run Immediately** if it's offered, turn off **Notify When Run** if you
+   want it to be quiet, and select **Log Books**.
+
+### Test it before relying on it
+
+1. Mark a book as read in Calibre-Web.
+2. Wait about `POLL_SECONDS` (5 minutes by default) for the watcher to queue it.
+   You can check with `curl` against `/queue` (see above).
+3. Run **Log Books** by hand and open the new entry in Day One.
+
+Also check:
+
+- **The entry's date.** *Get Dates from Input* has to understand the watcher's
+  timestamp format (`2026-11-10T22:30:20+00:00`). If it doesn't, entries get the
+  current time instead of when you finished the book.
+- **Whether the automation really runs without asking.** Some iOS versions require
+  confirmation for certain triggers.
+
+### Covers (not used yet)
+
+Entries are created without the cover for now. Photos attached to Day One entries
+created from Shortcuts sometimes don't show up. Some users report a blue square in
+the list preview while the full entry has the image, and others report images
+missing after syncing to the Mac. Before deciding it doesn't work, open the entry
+fully on the iPhone and check again after it syncs.
+
+To add covers once that works, put two steps before **Create Entry**:
+
+1. **Get Contents of URL** on `http://<truenas-ip>:8099/cover/[id]` with the same
+   `Authorization` header.
+2. Pass the result into Create Entry's **photo** field.
+
+Some items have no cover (`cover_ext` is `null`), and `/cover/[id]` returns 404 for
+them. An **If** on `cover_ext` avoids that.
+
+Day One's URL scheme can paste an image from the clipboard, but reports say the
+photo often still doesn't appear. It also opens the Day One app every time, so it
+isn't suitable for an unattended automation.
 
 ## Files on disk
 
