@@ -162,6 +162,10 @@ def detect_image(data):
     return None
 
 
+IMAGE_TYPES = {"jpg": "image/jpeg", "png": "image/png", "gif": "image/gif",
+               "webp": "image/webp", "heic": "image/heic"}
+
+
 def fetch_cover(book):
     if not book.get("cover_href"):
         return None, None
@@ -240,11 +244,13 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass
 
-    def _send(self, code, body=b"", ctype="application/json"):
+    def _send(self, code, body=b"", ctype="application/json", headers=None):
         if isinstance(body, (dict, list)):
             body = json.dumps(body).encode()
         self.send_response(code)
         self.send_header("Content-Type", ctype)
+        for k, v in (headers or {}).items():
+            self.send_header(k, v)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -270,7 +276,10 @@ class Handler(BaseHTTPRequestHandler):
             p = QUEUE_DIR / f"{iid}.img"
             if not p.exists():
                 return self._send(404, {"error": "no cover"})
-            return self._send(200, p.read_bytes(), "application/octet-stream")
+            data = p.read_bytes()
+            ext = detect_image(data) or "jpg"
+            return self._send(200, data, IMAGE_TYPES[ext],
+                              {"Content-Disposition": f'inline; filename="cover.{ext}"'})
         if self.path == "/sample":
             try:
                 books = fetch_read_books()
