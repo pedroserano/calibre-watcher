@@ -196,7 +196,18 @@ has to be on your home network to reach the watcher.
 ### The "Log Books" shortcut
 
 Create a new shortcut in the Shortcuts app named **Log Books**. Replace
-`<truenas-ip>` with your server's address and `<QUEUE_TOKEN>` with your token:
+`<truenas-ip>` with your server's address and `<QUEUE_TOKEN>` with your token.
+
+> **Square brackets mean "insert a variable", not text to type.** Wherever the
+> steps show `[id]`, `[title]` or `[combined authors]`, don't type the brackets.
+> Put the cursor there, tap the variable bar above the keyboard (or long-press and
+> choose **Select Variable**), and pick the result of the matching earlier step. It
+> should appear as a coloured bubble inside the text. If you see the plain text
+> `[id]`, the request goes to the wrong address and fails.
+>
+> All five **Get Dictionary Value** results are called *Dictionary Value*, so it's
+> easy to pick the wrong one. Tap each result and **Rename** it to its key (`id`,
+> `title`, …) so you can tell them apart.
 
 1. **Get Contents of URL**: `http://<truenas-ip>:8099/queue`, method **GET**,
    header `Authorization` = `Bearer <QUEUE_TOKEN>`.
@@ -209,7 +220,9 @@ Create a new shortcut in the Shortcuts app named **Log Books**. Replace
    3. **Get Dates from Input** on `detected_at`.
    4. **If** `cover_ext` *has any value*:
       - **Get Contents of URL**: `http://<truenas-ip>:8099/cover/[id]`, method
-        **GET**, with the same `Authorization` header.
+        **GET**, with the same `Authorization` header. Type
+        `http://<truenas-ip>:8099/cover/` and then insert the **id** variable
+        after the last `/`, as a bubble, not the text `[id]`.
       - **Otherwise**: leave empty.
       - **End If**.
 
@@ -220,8 +233,11 @@ Create a new shortcut in the Shortcuts app named **Log Books**. Replace
       step 3, and your journal. Tap **Show More**, then set **Photos** to the
       **If Result** variable. Books without a cover get an entry with no photo.
    6. **Get Contents of URL**: `http://<truenas-ip>:8099/ack/[id]`, method
-      **POST**, with the same `Authorization` header. This removes the book from
-      the queue so it's never logged twice.
+      **POST**, with the same `Authorization` header. Type
+      `http://<truenas-ip>:8099/ack/` and then insert the **id** variable after
+      the last `/`, as a bubble, not the text `[id]`. This removes the book from
+      the queue so it's never logged twice. If books keep getting logged again,
+      check this URL first.
 4. **End Repeat**.
 
 ### Run it automatically
