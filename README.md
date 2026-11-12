@@ -141,7 +141,7 @@ Every endpoint except `/health` needs the header
 |--------|---------------|---------|
 | GET    | `/health`     | `{"ok": true}`, no auth needed. Good for checking that it's up |
 | GET    | `/queue`      | JSON list of pending books, oldest first |
-| GET    | `/cover/<id>` | Cover image bytes for a pending item (404 if it had no cover) |
+| GET    | `/cover/<id>` | Cover image for a pending item, sent with its real type (`image/jpeg`, `image/png`, …) and a filename like `cover.jpg`. 404 if it had no cover |
 | POST   | `/ack/<id>`   | Removes the item (and its cover) from the queue. Call this after you've logged it |
 | GET    | `/sample`     | One already-read book with its cover as base64, **not** queued. Useful for testing a client |
 
@@ -203,14 +203,23 @@ Create a new shortcut in the Shortcuts app named **Log Books**. Replace
 2. **Get Dictionary from Input**.
 3. **Repeat with Each** on that result. Inside the loop:
    1. **Get Dictionary Value** from *Repeat Item*, once each for `title`,
-      `authors`, `id` and `detected_at`.
+      `authors`, `id`, `detected_at` and `cover_ext`.
    2. **Combine Text** on `authors`, with the custom separator ` and ` (with a
       space on each side).
    3. **Get Dates from Input** on `detected_at`.
-   4. **Create Entry** (Day One): body
+   4. **If** `cover_ext` *has any value*:
+      - **Get Contents of URL**: `http://<truenas-ip>:8099/cover/[id]`, method
+        **GET**, with the same `Authorization` header.
+      - **Otherwise**: leave empty.
+      - **End If**.
+
+      Some books have no cover, and `/cover/[id]` returns an error for them. The
+      If skips those.
+   5. **Create Entry** (Day One): body
       `Just finished reading [title] by [combined authors]`, tag **Book**, date from
-      the previous step, and your journal.
-   5. **Get Contents of URL**: `http://<truenas-ip>:8099/ack/[id]`, method
+      step 3, and your journal. Tap **Show More**, then set **Photos** to the
+      **If Result** variable. Books without a cover get an entry with no photo.
+   6. **Get Contents of URL**: `http://<truenas-ip>:8099/ack/[id]`, method
       **POST**, with the same `Authorization` header. This removes the book from
       the queue so it's never logged twice.
 4. **End Repeat**.
@@ -237,25 +246,23 @@ Also check:
 - **The entry's date.** *Get Dates from Input* has to understand the watcher's
   timestamp format (`2026-11-10T22:30:20+00:00`). If it doesn't, entries get the
   current time instead of when you finished the book.
+- **The cover.** Open the entry fully, not just the list preview, and check again
+  after it syncs to your other devices (see below).
 - **Whether the automation really runs without asking.** Some iOS versions require
   confirmation for certain triggers.
 
-### Covers (not used yet)
+### If the cover doesn't show up
 
-Entries are created without the cover for now. Photos attached to Day One entries
-created from Shortcuts sometimes don't show up. Some users report a blue square in
-the list preview while the full entry has the image, and others report images
-missing after syncing to the Mac. Before deciding it doesn't work, open the entry
-fully on the iPhone and check again after it syncs.
-
-To add covers once that works, put two steps before **Create Entry**:
-
-1. **Get Contents of URL** on `http://<truenas-ip>:8099/cover/[id]` with the same
-   `Authorization` header.
-2. Pass the result into Create Entry's **photo** field.
-
-Some items have no cover (`cover_ext` is `null`), and `/cover/[id]` returns 404 for
-them. An **If** on `cover_ext` avoids that.
+- **Update the watcher.** Older versions sent covers as a generic file
+  (`application/octet-stream`), which Shortcuts may not treat as a photo. Current
+  versions send the real image type. Restart the app in TrueNAS to pull the latest
+  version.
+- **Check the full entry.** Some people report that entries created from Shortcuts
+  show a blue square in Day One's list, but the photo is there when the entry is
+  opened. Others report photos missing after syncing to the Mac.
+- **Convert it in the shortcut.** Put **Convert Image** (format JPEG) on the cover
+  inside the If, after Get Contents of URL.
+- If none of that works, clear the **Photos** field to log books without covers.
 
 Day One's URL scheme can paste an image from the clipboard, but reports say the
 photo often still doesn't appear. It also opens the Day One app every time, so it
